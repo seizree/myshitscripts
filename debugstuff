@@ -3,11 +3,11 @@ local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/d
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 local Window = Fluent:CreateWindow({
-    Title = "debugstuff " .. Fluent.Version,
+    Title = "debug stuff " .. Fluent.Version,
     SubTitle = "seizre",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
-    Acrylic = trrue, -- The blur may be detectable, setting this to false disables blur entirely
+    Acrylic = true, -- The blur may be detectable, setting this to false disables blur entirely
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.K -- Used when theres no MinimizeKeybind
 })
@@ -21,10 +21,6 @@ local Options = Fluent.Options
 
 do
     
-
-
-
-
     Tabs.Main:AddButton({
         Title = "get position",
         Description = "",
@@ -54,7 +50,6 @@ do
         Description = "",
         Callback = function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/Cynacol/Dark-Dex-V3/refs/heads/main/Dark%20Dex%20V3.txt"))()
-
         end
     })
 
