@@ -1,0 +1,94 @@
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+
+local player = Players.LocalPlayer
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 320, 0, 250)
+frame.Position = UDim2.new(0.5, -160, 0.5, -125)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.Parent = screenGui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 10)
+frameCorner.Parent = frame
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Position = UDim2.new(1, -35, 0, 5)
+closeButton.Text = "X"
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 16
+closeButton.Parent = frame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.Parent = closeButton
+
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- Move the buttons downwards to avoid overlap with the close button
+local button = Instance.new("TextButton")
+button.Size = UDim2.new(0, 280, 0, 40)
+button.Position = UDim2.new(0, 20, 0, 50)
+button.Text = "Get Position"
+button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.Font = Enum.Font.GothamBold
+button.TextSize = 16
+button.Parent = frame
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 8)
+buttonCorner.Parent = button
+
+local textBox = Instance.new("TextLabel")
+textBox.Size = UDim2.new(0, 280, 0, 40)
+textBox.Position = UDim2.new(0, 20, 0, 100)
+textBox.Text = "Position: "
+textBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+textBox.TextColor3 = Color3.fromRGB(200, 200, 200)
+textBox.Font = Enum.Font.Gotham
+textBox.TextSize = 14
+textBox.Parent = frame
+
+local textBoxCorner = Instance.new("UICorner")
+textBoxCorner.CornerRadius = UDim.new(0, 8)
+textBoxCorner.Parent = textBox
+
+local copyButton = Instance.new("TextButton")
+copyButton.Size = UDim2.new(0, 280, 0, 40)
+copyButton.Position = UDim2.new(0, 20, 0, 150)
+copyButton.Text = "Copy Position"
+copyButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyButton.Font = Enum.Font.GothamBold
+copyButton.TextSize = 16
+copyButton.Parent = frame
+
+local copyCorner = Instance.new("UICorner")
+copyCorner.CornerRadius = UDim.new(0, 8)
+copyCorner.Parent = copyButton
+
+local function updatePosition()
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local pos = player.Character.HumanoidRootPart.Position
+        local roundedPos = Vector3.new(math.floor(pos.X), math.floor(pos.Y), math.floor(pos.Z))
+        textBox.Text = "Position: " .. tostring(roundedPos)
+    end
+end
+
+button.MouseButton1Click:Connect(updatePosition)
+copyButton.MouseButton1Click:Connect(function()
+    setclipboard(textBox.Text:gsub("Position: ", ""))
+end)
