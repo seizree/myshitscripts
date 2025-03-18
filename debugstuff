@@ -58,7 +58,7 @@ do
         Title = "dex",
         Description = "",
         Callback = function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/Babyhamsta/RBLX_Scripts/main/Universal/BypassedDarkDexV3.lua", true))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/DannyH3103/scripts/main/Hydrogen_DEXV4"))()
         end
     })
 
