@@ -1,3 +1,41 @@
+local player = game:GetService("Players").LocalPlayer
+local staminaValue = player.PlayerStats:FindFirstChild("Stamina")
+
+if staminaValue then
+    staminaValue.Value = 100
+    staminaValue.Changed:Connect(function()
+        if staminaValue.Value ~= 100 then
+            staminaValue.Value = 100  --
+        end
+    end)
+
+end
+-- NO STMINA SCIRP TWWWW
+
+
+local abilityCooldowns = game:GetService("ReplicatedStorage"):FindFirstChild("AbilityCooldowns")
+
+if abilityCooldowns then
+    for attributeName, _ in pairs(abilityCooldowns:GetAttributes()) do
+        abilityCooldowns:SetAttribute(attributeName, 0)
+    end
+    print("nocdsworked")
+else
+    warn("didntwork prolly updated")
+end
+
+
+-- NO CDS
+
+
+--BALL HITBOX
+
+local hitbox = game.Workspace:FindFirstChild("Football") and game.Workspace.Football:FindFirstChild("Hitbox")
+
+if hitbox then
+    hitbox.Size = Vector3.new(20, 20, 20) 
+end
+
 
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
@@ -83,7 +121,7 @@ end
 
 end
 
-local hitbox1 = game.Workspace:FindFirstChild("Football") and game.Workspace.Football:FindFirstChild("Hitbox")
+local hitbox = game.Workspace:FindFirstChild("Football") and game.Workspace.Football:FindFirstChild("Hitbox")
 
 if hitbox then
     local Slider = Tabs.Main:AddSlider("Slider", {
@@ -94,7 +132,7 @@ if hitbox then
         Max = 1, -- Fully transparent
         Rounding = 0.05,
         Callback = function(Value)
-            hitbox1.Transparency = Value -- Set hitbox transparency dynamically
+            hitbox.Transparency = Value -- Set hitbox transparency dynamically
         end
     })
 else
