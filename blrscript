@@ -8,7 +8,7 @@ if staminaValue then
             staminaValue.Value = 100  --
         end
     end)
-
+ 
 end
 -- NO STMINA SCIRP TWWWW
 
