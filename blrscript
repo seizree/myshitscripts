@@ -8,7 +8,7 @@ if staminaValue then
             staminaValue.Value = 100  --
         end
     end)
- 
+
 end
 -- NO STMINA SCIRP TWWWW
 
@@ -121,7 +121,7 @@ end
 
 end
 
-local hitbox = game.Workspace:FindFirstChild("Football") and game.Workspace.Football:FindFirstChild("Hitbox")
+local hitbox1 = game.Workspace:FindFirstChild("Football") and game.Workspace.Football:FindFirstChild("Hitbox")
 
 if hitbox then
     local Slider = Tabs.Main:AddSlider("Slider", {
@@ -132,7 +132,7 @@ if hitbox then
         Max = 1, -- Fully transparent
         Rounding = 0.05,
         Callback = function(Value)
-            hitbox.Transparency = Value -- Set hitbox transparency dynamically
+            hitbox1.Transparency = Value -- Set hitbox transparency dynamically
         end
     })
 else
