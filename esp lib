@@ -1,26 +1,29 @@
 -- Updated ESP Library with HP (Health) Display and Toggle Nametags
 
 -- CONFIGURATION SETTINGS
+-- The configuration table defines the colors associated with different player groups.
+-- Modify the color values as per your requirements.
 local CONFIG = {
     Killers = {
-        Color = Color3.fromRGB(255, 0, 0), -- Red
+        Color = Color3.fromRGB(255, 0, 0), -- Red for Killers
     },
     Spectating = {
-        Color = Color3.fromRGB(0, 255, 0), -- Green
+        Color = Color3.fromRGB(0, 255, 0), -- Green for Spectating players
     },
     Survivors = {
-        Color = Color3.fromRGB(0, 255, 255), -- Cyan
+        Color = Color3.fromRGB(0, 255, 255), -- Cyan for Survivors
     }
 }
 
--- Tracking tables
+-- Tracking tables for ESP highlights and nametags
 local Highlights = {}
 local Nametags = {}
 
 local localPlayer = game.Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- Helper: Create Highlight Instance
+-- Helper Function: Create Highlight Instance
+-- Creates a highlight around the character's model for better visibility.
 local function CreateHighlight(character, color)
     if not character:FindFirstChildOfClass("Highlight") then
         local highlight = Instance.new("Highlight")
@@ -36,7 +39,8 @@ local function CreateHighlight(character, color)
     end
 end
 
--- Helper: Create Nametag Billboard
+-- Helper Function: Create Nametag Billboard
+-- Adds a nametag above each character's head, displaying the player's name and health.
 local function CreateNametag(character)
     if not character:FindFirstChild("ESP_NameTag") then
         local head = character:FindFirstChild("Head") or character:FindFirstChildWhichIsA("BasePart")
@@ -64,7 +68,7 @@ local function CreateNametag(character)
             nameLabel.TextScaled = true
             nameLabel.Parent = billboard
 
-            -- Distance Label
+            -- Distance Label (Displays the distance to the player)
             local distanceLabel = Instance.new("TextLabel")
             distanceLabel.Name = "Distance"
             distanceLabel.Size = UDim2.new(1, 0, 0.5, 0)
@@ -78,7 +82,7 @@ local function CreateNametag(character)
             distanceLabel.TextScaled = true
             distanceLabel.Parent = billboard
 
-            -- Health Bar Frame
+            -- Health Bar (Displays the health of the character)
             local healthBack = Instance.new("Frame")
             healthBack.Name = "HealthBack"
             healthBack.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -101,7 +105,8 @@ local function CreateNametag(character)
     end
 end
 
--- Helper: Remove Nametag
+-- Helper Function: Remove Nametag
+-- Removes the nametag from a character if it exists.
 local function RemoveNametag(character)
     local billboard = character:FindFirstChild("ESP_NameTag")
     if billboard then
@@ -109,7 +114,8 @@ local function RemoveNametag(character)
     end
 end
 
--- Helper: Add ESP and Nametag, Excluding Dead Characters and Small Parts
+-- Helper Function: Add ESP for Different Player Types
+-- Adds ESP highlights and nametags for players in different folders (Killers, Spectating, Survivors).
 local function AddESP(folderName, folder)
     for _, character in ipairs(folder:GetChildren()) do
         if character:IsA("Model") and character:FindFirstChildWhichIsA("Humanoid") then
@@ -140,7 +146,8 @@ local function AddESP(folderName, folder)
     end)
 end
 
--- Setup ESP
+-- Function to Set Up the ESP
+-- Initializes the ESP for different player groups (Killers, Spectating, Survivors).
 local function SetupESP()
     local playersFolder = workspace:WaitForChild("Players")
 
@@ -150,6 +157,7 @@ local function SetupESP()
 end
 
 -- Toggle ESP (Turn On/Off)
+-- This function toggles the ESP on and off, removing or adding highlights and nametags.
 local espEnabled = false
 local function ToggleESP()
     espEnabled = not espEnabled
@@ -171,6 +179,7 @@ local function ToggleESP()
 end
 
 -- Update Loop for Healthbar, Distance, and Nametag Updates
+-- This loop updates health bars, nametags, and distances every 0.1 seconds.
 task.spawn(function()
     while task.wait(0.1) do
         if espEnabled then
