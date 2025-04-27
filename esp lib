@@ -1,0 +1,240 @@
+-- Updated ESP Library with HP (Health) Display and Toggle Nametags
+
+-- CONFIGURATION SETTINGS
+local CONFIG = {
+    Killers = {
+        Color = Color3.fromRGB(255, 0, 0), -- Red
+    },
+    Spectating = {
+        Color = Color3.fromRGB(0, 255, 0), -- Green
+    },
+    Survivors = {
+        Color = Color3.fromRGB(0, 255, 255), -- Cyan
+    }
+}
+
+-- Tracking tables
+local Highlights = {}
+local Nametags = {}
+
+local localPlayer = game.Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- Helper: Create Highlight Instance
+local function CreateHighlight(character, color)
+    if not character:FindFirstChildOfClass("Highlight") then
+        local highlight = Instance.new("Highlight")
+        highlight.Adornee = character
+        highlight.FillColor = color
+        highlight.FillTransparency = 0.5
+        highlight.OutlineColor = color
+        highlight.OutlineTransparency = 0
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = character
+        
+        table.insert(Highlights, highlight)
+    end
+end
+
+-- Helper: Create Nametag Billboard
+local function CreateNametag(character)
+    if not character:FindFirstChild("ESP_NameTag") then
+        local head = character:FindFirstChild("Head") or character:FindFirstChildWhichIsA("BasePart")
+        if head then
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "ESP_NameTag"
+            billboard.Adornee = head
+            billboard.Size = UDim2.new(4, 0, 2, 0)
+            billboard.StudsOffset = Vector3.new(0, 3, 0)
+            billboard.AlwaysOnTop = true
+            billboard.Parent = character
+
+            -- Name Label (Bolded, using Gotham Bold font)
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Name = "Name"
+            nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+            nameLabel.Position = UDim2.new(0, 0, 0, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = character.Name
+            nameLabel.TextColor3 = CONFIG[character.Parent.Name].Color
+            nameLabel.TextStrokeTransparency = 0.5
+            nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextSize = 18
+            nameLabel.TextScaled = true
+            nameLabel.Parent = billboard
+
+            -- Distance Label
+            local distanceLabel = Instance.new("TextLabel")
+            distanceLabel.Name = "Distance"
+            distanceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+            distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
+            distanceLabel.BackgroundTransparency = 1
+            distanceLabel.Text = ""
+            distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            distanceLabel.TextStrokeTransparency = 0.5
+            distanceLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+            distanceLabel.Font = Enum.Font.Gotham
+            distanceLabel.TextScaled = true
+            distanceLabel.Parent = billboard
+
+            -- Health Bar Frame
+            local healthBack = Instance.new("Frame")
+            healthBack.Name = "HealthBack"
+            healthBack.AnchorPoint = Vector2.new(0.5, 0.5)
+            healthBack.Position = UDim2.new(0.5, 0, 1.2, 0)
+            healthBack.Size = UDim2.new(0.5, 0, 0.05, 0)
+            healthBack.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            healthBack.BorderSizePixel = 0
+            healthBack.Parent = billboard
+
+            local healthBar = Instance.new("Frame")
+            healthBar.Name = "HealthBar"
+            healthBar.Position = UDim2.new(0, 0, 0, 0)
+            healthBar.Size = UDim2.new(1, 0, 1, 0)
+            healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            healthBar.BorderSizePixel = 0
+            healthBar.Parent = healthBack
+
+            table.insert(Nametags, {billboard = billboard, character = character})
+        end
+    end
+end
+
+-- Helper: Remove Nametag
+local function RemoveNametag(character)
+    local billboard = character:FindFirstChild("ESP_NameTag")
+    if billboard then
+        billboard:Destroy()
+    end
+end
+
+-- Helper: Toggle Nametags
+local function ToggleNametags(showNametags)
+    for _, data in ipairs(Nametags) do
+        local character = data.character
+        if character and character.Parent then
+            local billboard = character:FindFirstChild("ESP_NameTag")
+            if billboard then
+                if showNametags then
+                    -- Recreate the nametag if we want to show it
+                    CreateNametag(character)
+                else
+                    -- Remove the nametag if we want to hide it
+                    RemoveNametag(character)
+                end
+            end
+        end
+    end
+end
+
+-- Helper: Add ESP and Nametag, Excluding Dead Characters and Small Parts
+local function AddESP(folderName, folder)
+    for _, character in ipairs(folder:GetChildren()) do
+        if character:IsA("Model") and character:FindFirstChildWhichIsA("Humanoid") then
+            local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+            -- Skip dead characters (health is 0) or random small parts
+            if humanoid and humanoid.Health > 0 then
+                local humanoidRoot = character:FindFirstChild("HumanoidRootPart")
+                if humanoidRoot and character.Parent ~= localPlayer.Parent then
+                    CreateHighlight(character, CONFIG[folderName].Color)
+                    CreateNametag(character)
+                end
+            end
+        end
+    end
+
+    folder.ChildAdded:Connect(function(character)
+        task.wait(0.2)
+        if character:IsA("Model") and character:FindFirstChildWhichIsA("Humanoid") then
+            local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                local humanoidRoot = character:FindFirstChild("HumanoidRootPart")
+                if humanoidRoot and character.Parent ~= localPlayer.Parent then
+                    CreateHighlight(character, CONFIG[folderName].Color)
+                    CreateNametag(character)
+                end
+            end
+        end
+    end)
+end
+
+-- Setup
+local function SetupESP()
+    local playersFolder = workspace:WaitForChild("Players")
+
+    AddESP("Killers", playersFolder:WaitForChild("Killers"))
+    AddESP("Spectating", playersFolder:WaitForChild("Spectating"))
+    AddESP("Survivors", playersFolder:WaitForChild("Survivors"))
+end
+
+-- Toggle ESP (Turn On/Off)
+local espEnabled = false
+local function ToggleESP()
+    espEnabled = not espEnabled
+    if espEnabled then
+        SetupESP()
+    else
+        for _, character in ipairs(workspace.Players:GetChildren()) do
+            if character:IsA("Model") and character:FindFirstChildWhichIsA("Humanoid") then
+                RemoveESP(character)
+            end
+        end
+    end
+end
+
+-- Update Loop for Healthbar, Distance, and Nametag Updates
+task.spawn(function()
+    while task.wait(0.1) do
+        if espEnabled then
+            for _, highlight in ipairs(Highlights) do
+                if highlight and highlight.Parent then
+                    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    for folderName, settings in pairs(CONFIG) do
+                        if highlight.Adornee and highlight.Adornee:IsDescendantOf(workspace.Players[folderName]) then
+                            highlight.FillColor = settings.Color
+                            highlight.OutlineColor = settings.Color
+                        end
+                    end
+                end
+            end
+
+            for _, data in ipairs(Nametags) do
+                if data.billboard and data.billboard.Parent then
+                    local char = data.billboard.Parent
+                    local hum = char:FindFirstChildWhichIsA("Humanoid")
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    if hum and root and hum.Health > 0 then
+                        local distance = (camera.CFrame.Position - root.Position).Magnitude
+                        local distanceText = data.billboard:FindFirstChild("Distance")
+                        if distanceText then
+                            distanceText.Text = string.format("%.0fm", distance)
+                        end
+                        
+                        local healthBack = data.billboard:FindFirstChild("HealthBack")
+                        if healthBack then
+                            local healthBar = healthBack:FindFirstChild("HealthBar")
+                            if healthBar then
+                                healthBar.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0)
+                                -- Change health bar color based on health level
+                                if hum.Health > 50 then
+                                    healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Green
+                                elseif hum.Health > 25 then
+                                    healthBar.BackgroundColor3 = Color3.fromRGB(255, 165, 0) -- Orange
+                                else
+                                    healthBar.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Red
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Call SetupESP to initialize the ESP
+SetupESP()
+
+-- You can call ToggleESP() to enable or disable the ESP
+-- ToggleNametags(showNametags) to enable/disable nametags
