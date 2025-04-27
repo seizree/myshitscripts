@@ -109,25 +109,6 @@ local function RemoveNametag(character)
     end
 end
 
--- Helper: Toggle Nametags
-local function ToggleNametags(showNametags)
-    for _, data in ipairs(Nametags) do
-        local character = data.character
-        if character and character.Parent then
-            local billboard = character:FindFirstChild("ESP_NameTag")
-            if billboard then
-                if showNametags then
-                    -- Recreate the nametag if we want to show it
-                    CreateNametag(character)
-                else
-                    -- Remove the nametag if we want to hide it
-                    RemoveNametag(character)
-                end
-            end
-        end
-    end
-end
-
 -- Helper: Add ESP and Nametag, Excluding Dead Characters and Small Parts
 local function AddESP(folderName, folder)
     for _, character in ipairs(folder:GetChildren()) do
@@ -159,7 +140,7 @@ local function AddESP(folderName, folder)
     end)
 end
 
--- Setup
+-- Setup ESP
 local function SetupESP()
     local playersFolder = workspace:WaitForChild("Players")
 
@@ -175,9 +156,15 @@ local function ToggleESP()
     if espEnabled then
         SetupESP()
     else
+        -- Remove all ESP
         for _, character in ipairs(workspace.Players:GetChildren()) do
             if character:IsA("Model") and character:FindFirstChildWhichIsA("Humanoid") then
-                RemoveESP(character)
+                RemoveNametag(character)
+                -- Remove highlight
+                local highlight = character:FindFirstChildOfClass("Highlight")
+                if highlight then
+                    highlight:Destroy()
+                end
             end
         end
     end
@@ -187,6 +174,7 @@ end
 task.spawn(function()
     while task.wait(0.1) do
         if espEnabled then
+            -- Update highlights
             for _, highlight in ipairs(Highlights) do
                 if highlight and highlight.Parent then
                     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
@@ -199,6 +187,7 @@ task.spawn(function()
                 end
             end
 
+            -- Update Nametags
             for _, data in ipairs(Nametags) do
                 if data.billboard and data.billboard.Parent then
                     local char = data.billboard.Parent
@@ -238,3 +227,12 @@ SetupESP()
 
 -- You can call ToggleESP() to enable or disable the ESP
 -- ToggleNametags(showNametags) to enable/disable nametags
+
+-- A simple function to update the color of different types
+function UpdateColor(type, color)
+    if CONFIG[type] then
+        CONFIG[type].Color = color
+        -- Update the ESP visuals with the new color
+        ToggleESP()
+    end
+end
