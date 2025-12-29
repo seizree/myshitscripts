@@ -1,0 +1,1036 @@
+-- ============================================================================
+-- ENHANCED AUTO-ROB SCRIPT V3.0 - GUI EDITION
+-- Professional brainrot stealing system with LinoriaLib interface
+-- Anti-detection features & intelligent automation
+-- ============================================================================
+
+-- Load LinoriaLib
+local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
+local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
+local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
+
+-- ============================================================================
+-- ANTI-DETECTION & STEALTH
+-- ============================================================================
+
+local AntiDetection = {
+    RandomizeWalkSpeed = true,
+    RandomizePathDeviations = true,
+    HumanLikeDelays = true,
+    AvoidSuspiciousPatterns = true,
+}
+
+local function GetRandomDelay(min, max)
+    return min + (math.random() * (max - min))
+end
+
+local function GetHumanizedValue(base, variance)
+    return base + (math.random() * variance * 2 - variance)
+end
+
+-- ============================================================================
+-- CONFIGURATION
+-- ============================================================================
+
+local CONFIG = {
+    AUTO_ROB_ENABLED = false,
+    MIN_GENERATION_THRESHOLD = 0,
+    MIN_VALUE_THRESHOLD = 0,
+    PATHFINDING_TIMEOUT = 5,
+    STEAL_COOLDOWN = 2,
+    MOVEMENT_PRECISION = 4,
+    RETRY_ATTEMPTS = 3,
+    PRIORITY_MUTATIONS = {"Shiny", "Golden", "Rainbow", "Crystal", "Mystic"},
+    BLACKLIST_PLOTS = {},
+    DEBUG_MODE = false,
+    SMART_TARGETING = true,
+    AVOID_COMBAT_ZONES = true,
+    VISUAL_MARKERS = true,
+    AUTO_DELIVER = true,
+    HUMANIZED_MOVEMENT = true,
+    WALK_SPEED_VARIANCE = 0.15,
+    PATH_DEVIATION = 0.5,
+}
+
+-- State Management
+local State = {
+    autoRob = false,
+    isInitialized = false,
+    currentTarget = nil,
+    failedAttempts = 0,
+    totalSteals = 0,
+    sessionStartTime = tick(),
+    lastStealTime = 0,
+    isMoving = false,
+    isPaused = false,
+}
+
+-- Statistics
+local Stats = {
+    successfulSteals = 0,
+    failedSteals = 0,
+    totalValue = 0,
+    bestSteal = {generation = 0, mutation = "None"},
+    averageStealTime = 0,
+    stealTimes = {},
+}
+
+-- ============================================================================
+-- SERVICES & DEPENDENCIES
+-- ============================================================================
+
+local Players = game:GetService("Players")
+local PathfindingService = game:GetService("PathfindingService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local clientPlayer = Players.LocalPlayer
+local Mutations = require(ReplicatedStorage.Datas.Mutations)
+local Animals = require(ReplicatedStorage.Datas.Animals)
+local Plots = workspace.Plots
+
+-- ============================================================================
+-- UTILITY FUNCTIONS
+-- ============================================================================
+
+local function DebugLog(message, ...)
+    if CONFIG.DEBUG_MODE then
+        print(string.format("[DEBUG %s] " .. message, os.date("%H:%M:%S"), ...))
+    end
+end
+
+local function SafeRequire(module)
+    local success, result = pcall(require, module)
+    return success and result or nil
+end
+
+local function IsValidInstance(instance, className)
+    return instance and typeof(instance) == "Instance" and instance:IsA(className or "Instance")
+end
+
+local function GetCharacterSafe()
+    local character = clientPlayer.Character
+    if not character then return nil end
+    
+    local root = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChild("Humanoid")
+    
+    if not root or not humanoid or humanoid.Health <= 0 then
+        return nil
+    end
+    
+    return character, root, humanoid
+end
+
+local function FormatNumber(num)
+    if num >= 1000000 then
+        return string.format("%.2fM", num / 1000000)
+    elseif num >= 1000 then
+        return string.format("%.2fK", num / 1000)
+    else
+        return string.format("%.2f", num)
+    end
+end
+
+local function FormatTime(seconds)
+    local hours = math.floor(seconds / 3600)
+    local minutes = math.floor((seconds % 3600) / 60)
+    local secs = math.floor(seconds % 60)
+    
+    if hours > 0 then
+        return string.format("%dh %dm %ds", hours, minutes, secs)
+    elseif minutes > 0 then
+        return string.format("%dm %ds", minutes, secs)
+    else
+        return string.format("%ds", secs)
+    end
+end
+
+-- ============================================================================
+-- DATA PROCESSING
+-- ============================================================================
+
+local function CalculateMutationScore(mutationName)
+    for priority, name in ipairs(CONFIG.PRIORITY_MUTATIONS) do
+        if mutationName == name then
+            return (#CONFIG.PRIORITY_MUTATIONS - priority + 1) * 1000
+        end
+    end
+    return 0
+end
+
+local function ApplyBrainrotDataMutation(data, mutationName)
+    if not Mutations[mutationName] then
+        warn(string.format("[MUTATION] Unknown mutation: %s", mutationName))
+        return
+    end
+    
+    local mutationData = Mutations[mutationName]
+    local modifier = mutationData.Modifier or 0
+    
+    data.Price = data.Price + (data.Price * modifier)
+    data.Generation = data.Generation + (data.Generation * modifier)
+    data.MutationScore = CalculateMutationScore(mutationName)
+    
+    DebugLog("Applied mutation %s with modifier %.2f", mutationName, modifier)
+end
+
+local function GetPlotBrainrotData(plot, index)
+    local success, result = pcall(function()
+        local podiums = plot:FindFirstChild("AnimalPodiums")
+        if not podiums then return nil end
+        
+        local podium = podiums:FindFirstChild(tostring(index))
+        if not podium then return nil end
+        
+        local base = podium:FindFirstChild("Base")
+        if not base then return nil end
+        
+        local spawn = base:FindFirstChild("Spawn")
+        if not spawn then return nil end
+        
+        local attachment = spawn:FindFirstChild("Attachment")
+        if not attachment then return nil end
+        
+        local billboard = attachment:FindFirstChild("AnimalOverhead")
+        if not billboard then return nil end
+        
+        local displayName = billboard:FindFirstChild("DisplayName")
+        if not displayName or not displayName.Visible then return nil end
+        
+        local animalName = displayName.Text
+        if not Animals[animalName] then
+            return nil
+        end
+        
+        local data = table.clone(Animals[animalName])
+        data.MutationScore = 0
+        data.AnimalName = animalName
+        
+        local mutationLabel = billboard:FindFirstChild("Mutation")
+        if mutationLabel and mutationLabel.Visible then
+            local mutation = mutationLabel.Text
+            data.Mutation = mutation
+            ApplyBrainrotDataMutation(data, mutation)
+        end
+        
+        return data
+    end)
+    
+    if not success then
+        DebugLog("Error getting brainrot data: %s", tostring(result))
+        return nil
+    end
+    
+    return result
+end
+
+-- ============================================================================
+-- PLOT ANALYSIS
+-- ============================================================================
+
+local clientPlot = nil
+for _, plot in ipairs(Plots:GetChildren()) do
+    local plotSign = plot:FindFirstChild("PlotSign")
+    if plotSign then
+        local yourBase = plotSign:FindFirstChild("YourBase")
+        if yourBase and yourBase.Enabled then
+            clientPlot = plot
+            break
+        end
+    end
+end
+
+local function IsPlotOpen(plot)
+    local laserHitbox = plot:FindFirstChild("LaserHitbox")
+    if not laserHitbox then return true end
+    
+    for _, part in ipairs(laserHitbox:GetChildren()) do
+        if IsValidInstance(part, "BasePart") and not part.CanCollide then
+            return true
+        end
+    end
+    
+    return false
+end
+
+local function IsPlotBlacklisted(plot)
+    for _, blacklistedPlot in ipairs(CONFIG.BLACKLIST_PLOTS) do
+        if plot == blacklistedPlot then
+            return true
+        end
+    end
+    return false
+end
+
+local function CalculateBrainrotValue(data, distance)
+    local baseValue = data.Generation * (data.Price or 1)
+    local mutationBonus = data.MutationScore or 0
+    local distancePenalty = CONFIG.SMART_TARGETING and (distance / 100) or 0
+    
+    return baseValue + mutationBonus - distancePenalty
+end
+
+-- ============================================================================
+-- PATHFINDING
+-- ============================================================================
+
+local pathfindingParams = {
+    AgentRadius = 3,
+    AgentHeight = 6,
+    AgentCanJump = true,
+    AgentCanClimb = false,
+    WaypointSpacing = 4,
+    Costs = {
+        Water = math.huge,
+        Danger = math.huge
+    }
+}
+
+local function GetPath(start, goal, timeout)
+    timeout = timeout or CONFIG.PATHFINDING_TIMEOUT
+    
+    local path = PathfindingService:CreatePath(pathfindingParams)
+    
+    local success, errorMessage = pcall(function()
+        path:ComputeAsync(start, goal)
+    end)
+    
+    if not success then
+        DebugLog("Pathfinding error: %s", tostring(errorMessage))
+        return nil
+    end
+    
+    if path.Status ~= Enum.PathStatus.Success then
+        DebugLog("Path status: %s", tostring(path.Status))
+        return nil
+    end
+    
+    return path
+end
+
+local function IsBrainrotStealable(podium, characterPosition)
+    local base = podium:FindFirstChild("Base")
+    if not base then return nil, nil, nil end
+    
+    local spawn = base:FindFirstChild("Spawn")
+    if not spawn then return nil, nil, nil end
+    
+    local promptAttachment = spawn:FindFirstChild("PromptAttachment")
+    if not promptAttachment then return nil, nil, nil end
+    
+    local goal = promptAttachment.WorldCFrame.Position
+    local distance = (characterPosition - goal).Magnitude
+    
+    local path = GetPath(characterPosition, goal)
+    if not path then
+        return nil, nil, distance
+    end
+    
+    local stealPrompt = nil
+    for _, child in ipairs(promptAttachment:GetChildren()) do
+        if child:IsA("ProximityPrompt") and child.ActionText == "Steal" then
+            stealPrompt = child
+            break
+        end
+    end
+    
+    if not stealPrompt then
+        return nil, nil, distance
+    end
+    
+    return path, stealPrompt, distance
+end
+
+-- ============================================================================
+-- TARGET SELECTION
+-- ============================================================================
+
+local function GetPlotsBestBrainrot()
+    local character, root, humanoid = GetCharacterSafe()
+    if not character then return nil end
+    
+    local characterPosition = root.Position
+    local bestData = nil
+    local bestPodium = nil
+    local bestValue = CONFIG.MIN_VALUE_THRESHOLD
+    local bestPath = nil
+    local bestStealPrompt = nil
+    local bestDistance = math.huge
+    
+    for _, plot in ipairs(Plots:GetChildren()) do
+        if plot == clientPlot or IsPlotBlacklisted(plot) or not IsPlotOpen(plot) then
+            continue
+        end
+        
+        local podiums = plot:FindFirstChild("AnimalPodiums")
+        if not podiums then continue end
+        
+        for _, podium in ipairs(podiums:GetChildren()) do
+            local podiumIndex = podium.Name
+            local brainrotData = GetPlotBrainrotData(plot, podiumIndex)
+            
+            if brainrotData and brainrotData.Generation >= CONFIG.MIN_GENERATION_THRESHOLD then
+                local path, stealPrompt, distance = IsBrainrotStealable(podium, characterPosition)
+                
+                if path and stealPrompt then
+                    local value = CalculateBrainrotValue(brainrotData, distance)
+                    
+                    if value > bestValue then
+                        bestData = brainrotData
+                        bestPodium = podium
+                        bestValue = value
+                        bestPath = path
+                        bestStealPrompt = stealPrompt
+                        bestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+    
+    if bestData then
+        DebugLog("Best target - Value: %.2f, Distance: %.2f, Generation: %.2f", 
+                 bestValue, bestDistance, bestData.Generation)
+    end
+    
+    return bestData, bestPodium, bestPath, bestStealPrompt
+end
+
+-- ============================================================================
+-- VISUAL MARKERS
+-- ============================================================================
+
+local visualMarker = Instance.new("Part")
+visualMarker.Size = Vector3.new(1, 1, 1)
+visualMarker.Anchored = true
+visualMarker.CanCollide = false
+visualMarker.Material = Enum.Material.Neon
+visualMarker.Shape = Enum.PartType.Ball
+visualMarker.BrickColor = BrickColor.new("Bright green")
+visualMarker.Transparency = 0.3
+visualMarker.Parent = workspace
+visualMarker.Name = "AutoRobMarker"
+
+local function UpdateMarkerVisibility()
+    visualMarker.Parent = CONFIG.VISUAL_MARKERS and workspace or nil
+end
+
+-- ============================================================================
+-- HUMANIZED MOVEMENT
+-- ============================================================================
+
+local function ApplyHumanizedMovement(humanoid)
+    if CONFIG.HUMANIZED_MOVEMENT and AntiDetection.RandomizeWalkSpeed then
+        local baseSpeed = 16
+        local variance = baseSpeed * CONFIG.WALK_SPEED_VARIANCE
+        humanoid.WalkSpeed = GetHumanizedValue(baseSpeed, variance)
+    end
+end
+
+local function GetDeviatedPosition(position)
+    if not CONFIG.HUMANIZED_MOVEMENT or not AntiDetection.RandomizePathDeviations then
+        return position
+    end
+    
+    local deviation = CONFIG.PATH_DEVIATION
+    return position + Vector3.new(
+        (math.random() - 0.5) * deviation * 2,
+        0,
+        (math.random() - 0.5) * deviation * 2
+    )
+end
+
+-- ============================================================================
+-- MOVEMENT & ACTIONS
+-- ============================================================================
+
+local function WalkPath(path)
+    local character, root, humanoid = GetCharacterSafe()
+    if not character then return false end
+    
+    State.isMoving = true
+    ApplyHumanizedMovement(humanoid)
+    
+    local waypoints = path:GetWaypoints()
+    
+    for i, waypoint in ipairs(waypoints) do
+        if not State.autoRob or State.isPaused then
+            DebugLog("Auto-rob disabled or paused, stopping movement")
+            State.isMoving = false
+            return false
+        end
+        
+        local goal = GetDeviatedPosition(waypoint.Position)
+        if CONFIG.VISUAL_MARKERS then
+            visualMarker.Position = goal
+        end
+        
+        local attempts = 0
+        while State.autoRob and not State.isPaused and attempts < CONFIG.RETRY_ATTEMPTS do
+            local currentRoot = character:FindFirstChild("HumanoidRootPart")
+            if not currentRoot then 
+                State.isMoving = false
+                return false 
+            end
+            
+            local distance = (currentRoot.Position - goal).Magnitude
+            
+            if distance <= CONFIG.MOVEMENT_PRECISION then
+                break
+            end
+            
+            humanoid:MoveTo(goal)
+            
+            if AntiDetection.HumanLikeDelays then
+                task.wait(GetRandomDelay(0.05, 0.15))
+            end
+            
+            local timeout = tick() + 5
+            while (currentRoot.Position - goal).Magnitude > CONFIG.MOVEMENT_PRECISION do
+                if tick() > timeout or not State.autoRob or State.isPaused then
+                    attempts = attempts + 1
+                    break
+                end
+                task.wait(0.1)
+            end
+            
+            if distance <= CONFIG.MOVEMENT_PRECISION then
+                break
+            end
+        end
+        
+        if attempts >= CONFIG.RETRY_ATTEMPTS then
+            warn("[MOVEMENT] Failed to reach waypoint after retries")
+            State.isMoving = false
+            return false
+        end
+    end
+    
+    State.isMoving = false
+    return true
+end
+
+local function StealBrainrot(podium, path, stealPrompt)
+    local startTime = tick()
+    
+    DebugLog("Navigating to target...")
+    local success = WalkPath(path)
+    
+    if not success then
+        warn("[ACTION] Failed to navigate to target")
+        Stats.failedSteals = Stats.failedSteals + 1
+        return false
+    end
+    
+    if AntiDetection.HumanLikeDelays then
+        task.wait(GetRandomDelay(0.3, 0.8))
+    end
+    
+    DebugLog("Attempting to steal brainrot...")
+    
+    local stealSuccess = pcall(function()
+        stealPrompt:InputHoldBegin()
+        task.wait(0.5)
+    end)
+    
+    if stealSuccess then
+        State.lastStealTime = tick()
+        local stealTime = tick() - startTime
+        table.insert(Stats.stealTimes, stealTime)
+        if #Stats.stealTimes > 10 then
+            table.remove(Stats.stealTimes, 1)
+        end
+        return true
+    else
+        warn("[ACTION] Failed to trigger steal prompt")
+        Stats.failedSteals = Stats.failedSteals + 1
+        return false
+    end
+end
+
+local function DeliverBrainrot()
+    if not clientPlot then
+        warn("[DELIVERY] Client plot not found")
+        return false
+    end
+    
+    local deliveryHitbox = clientPlot:FindFirstChild("DeliveryHitbox")
+    if not deliveryHitbox then
+        warn("[DELIVERY] Delivery hitbox not found")
+        return false
+    end
+    
+    local character, root = GetCharacterSafe()
+    if not character then return false end
+    
+    local deliveryGoal = deliveryHitbox.Position
+    local path = GetPath(root.Position, deliveryGoal)
+    
+    if not path then
+        warn("[DELIVERY] Cannot pathfind to delivery point")
+        return false
+    end
+    
+    DebugLog("Delivering brainrot...")
+    return WalkPath(path)
+end
+
+-- ============================================================================
+-- MAIN LOOP
+-- ============================================================================
+
+local function UpdateStatistics(data)
+    Stats.successfulSteals = Stats.successfulSteals + 1
+    Stats.totalValue = Stats.totalValue + (data.Generation * (data.Price or 1))
+    
+    if data.Generation > Stats.bestSteal.generation then
+        Stats.bestSteal.generation = data.Generation
+        Stats.bestSteal.mutation = data.Mutation or "None"
+        Stats.bestSteal.animal = data.AnimalName or "Unknown"
+    end
+    
+    local total = 0
+    for _, time in ipairs(Stats.stealTimes) do
+        total = total + time
+    end
+    Stats.averageStealTime = #Stats.stealTimes > 0 and (total / #Stats.stealTimes) or 0
+end
+
+local function MainLoop()
+    if State.isPaused then
+        task.wait(1)
+        return
+    end
+    
+    local character, root = GetCharacterSafe()
+    if not character then
+        warn("[LOOP] Character not found or dead")
+        task.wait(2)
+        return
+    end
+    
+    -- Check if currently stealing
+    if clientPlayer:GetAttribute("Stealing") then
+        if CONFIG.AUTO_DELIVER then
+            DebugLog("Delivering stolen brainrot...")
+            if DeliverBrainrot() then
+                State.totalSteals = State.totalSteals + 1
+                if State.currentTarget then
+                    UpdateStatistics(State.currentTarget)
+                end
+            else
+                State.failedAttempts = State.failedAttempts + 1
+            end
+        end
+        task.wait(CONFIG.STEAL_COOLDOWN)
+        return
+    end
+    
+    -- Find best target
+    local data, podium, path, stealPrompt = GetPlotsBestBrainrot()
+    
+    if not data then
+        DebugLog("No stealable brainrots found")
+        task.wait(3)
+        return
+    end
+    
+    if not path or not stealPrompt then
+        warn("[LOOP] Target found but not accessible")
+        task.wait(2)
+        return
+    end
+    
+    -- Execute steal
+    State.currentTarget = data
+    local success = StealBrainrot(podium, path, stealPrompt)
+    
+    if not success then
+        State.failedAttempts = State.failedAttempts + 1
+        task.wait(CONFIG.STEAL_COOLDOWN)
+    end
+end
+
+-- ============================================================================
+-- GUI SETUP
+-- ============================================================================
+
+local Window = Library:CreateWindow({
+    Title = 'Brainrot Auto-Steal V3.0',
+    Center = true,
+    AutoShow = true,
+    TabPadding = 8,
+    MenuFadeTime = 0.2
+})
+
+local Tabs = {
+    Main = Window:AddTab('Main'),
+    Settings = Window:AddTab('Settings'),
+    Statistics = Window:AddTab('Statistics'),
+    UISettings = Window:AddTab('UI Settings'),
+}
+
+-- ============================================================================
+-- MAIN TAB
+-- ============================================================================
+
+local MainGroup = Tabs.Main:AddLeftGroupbox('Auto Rob Controls')
+
+MainGroup:AddToggle('AutoRobToggle', {
+    Text = 'Enable Auto Rob',
+    Default = false,
+    Tooltip = 'Automatically steal brainrots from other plots',
+    Callback = function(Value)
+        State.autoRob = Value
+        getgenv().autoRob = Value
+        print('[AUTO-ROB]', Value and 'ENABLED' or 'DISABLED')
+    end
+})
+
+MainGroup:AddToggle('PauseToggle', {
+    Text = 'Pause Script',
+    Default = false,
+    Tooltip = 'Temporarily pause without disabling',
+    Callback = function(Value)
+        State.isPaused = Value
+    end
+})
+
+MainGroup:AddDivider()
+
+MainGroup:AddSlider('MinGeneration', {
+    Text = 'Min Generation',
+    Default = 0,
+    Min = 0,
+    Max = 1000,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        CONFIG.MIN_GENERATION_THRESHOLD = Value
+    end
+})
+
+MainGroup:AddSlider('MinValue', {
+    Text = 'Min Value Threshold',
+    Default = 0,
+    Min = 0,
+    Max = 10000,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        CONFIG.MIN_VALUE_THRESHOLD = Value
+    end
+})
+
+local TargetGroup = Tabs.Main:AddRightGroupbox('Target Priority')
+
+TargetGroup:AddToggle('SmartTargeting', {
+    Text = 'Smart Targeting',
+    Default = true,
+    Tooltip = 'Consider distance and value when selecting targets',
+    Callback = function(Value)
+        CONFIG.SMART_TARGETING = Value
+    end
+})
+
+TargetGroup:AddLabel('Priority Mutations:')
+local mutationsList = table.concat(CONFIG.PRIORITY_MUTATIONS, ", ")
+TargetGroup:AddLabel(mutationsList, true)
+
+TargetGroup:AddDivider()
+
+TargetGroup:AddToggle('AutoDeliver', {
+    Text = 'Auto Deliver',
+    Default = true,
+    Tooltip = 'Automatically deliver stolen brainrots',
+    Callback = function(Value)
+        CONFIG.AUTO_DELIVER = Value
+    end
+})
+
+-- ============================================================================
+-- SETTINGS TAB
+-- ============================================================================
+
+local MovementGroup = Tabs.Settings:AddLeftGroupbox('Movement Settings')
+
+MovementGroup:AddToggle('HumanizedMovement', {
+    Text = 'Humanized Movement',
+    Default = true,
+    Tooltip = 'Makes movement appear more natural',
+    Callback = function(Value)
+        CONFIG.HUMANIZED_MOVEMENT = Value
+    end
+})
+
+MovementGroup:AddSlider('WalkSpeedVariance', {
+    Text = 'Walk Speed Variance',
+    Default = 0.15,
+    Min = 0,
+    Max = 0.5,
+    Rounding = 2,
+    Compact = false,
+    Callback = function(Value)
+        CONFIG.WALK_SPEED_VARIANCE = Value
+    end
+})
+
+MovementGroup:AddSlider('PathDeviation', {
+    Text = 'Path Deviation',
+    Default = 0.5,
+    Min = 0,
+    Max = 2,
+    Rounding = 1,
+    Compact = false,
+    Callback = function(Value)
+        CONFIG.PATH_DEVIATION = Value
+    end
+})
+
+MovementGroup:AddSlider('MovementPrecision', {
+    Text = 'Movement Precision',
+    Default = 4,
+    Min = 2,
+    Max = 10,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        CONFIG.MOVEMENT_PRECISION = Value
+    end
+})
+
+local StealthGroup = Tabs.Settings:AddRightGroupbox('Anti-Detection')
+
+StealthGroup:AddToggle('RandomWalkSpeed', {
+    Text = 'Randomize Walk Speed',
+    Default = true,
+    Tooltip = 'Randomly varies walk speed to appear human',
+    Callback = function(Value)
+        AntiDetection.RandomizeWalkSpeed = Value
+    end
+})
+
+StealthGroup:AddToggle('RandomPathDeviation', {
+    Text = 'Random Path Deviations',
+    Default = true,
+    Tooltip = 'Adds slight randomness to pathfinding',
+    Callback = function(Value)
+        AntiDetection.RandomizePathDeviations = Value
+    end
+})
+
+StealthGroup:AddToggle('HumanDelays', {
+    Text = 'Human-Like Delays',
+    Default = true,
+    Tooltip = 'Adds natural delays between actions',
+    Callback = function(Value)
+        AntiDetection.HumanLikeDelays = Value
+    end
+})
+
+local VisualGroup = Tabs.Settings:AddLeftGroupbox('Visual Settings')
+
+VisualGroup:AddToggle('VisualMarkers', {
+    Text = 'Show Visual Markers',
+    Default = true,
+    Tooltip = 'Display waypoint markers',
+    Callback = function(Value)
+        CONFIG.VISUAL_MARKERS = Value
+        UpdateMarkerVisibility()
+    end
+})
+
+VisualGroup:AddToggle('DebugMode', {
+    Text = 'Debug Mode',
+    Default = false,
+    Tooltip = 'Show detailed debug information',
+    Callback = function(Value)
+        CONFIG.DEBUG_MODE = Value
+    end
+})
+
+local AdvancedGroup = Tabs.Settings:AddRightGroupbox('Advanced Settings')
+
+AdvancedGroup:AddSlider('StealCooldown', {
+    Text = 'Steal Cooldown (s)',
+    Default = 2,
+    Min = 0.5,
+    Max = 10,
+    Rounding = 1,
+    Compact = false,
+    Callback = function(Value)
+        CONFIG.STEAL_COOLDOWN = Value
+    end
+})
+
+AdvancedGroup:AddSlider('RetryAttempts', {
+    Text = 'Retry Attempts',
+    Default = 3,
+    Min = 1,
+    Max = 10,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        CONFIG.RETRY_ATTEMPTS = Value
+    end
+})
+
+AdvancedGroup:AddSlider('PathfindTimeout', {
+    Text = 'Pathfinding Timeout (s)',
+    Default = 5,
+    Min = 2,
+    Max = 15,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        CONFIG.PATHFINDING_TIMEOUT = Value
+    end
+})
+
+-- ============================================================================
+-- STATISTICS TAB
+-- ============================================================================
+
+local StatsGroup = Tabs.Statistics:AddLeftGroupbox('Session Statistics')
+
+local StatsLabels = {
+    Runtime = StatsGroup:AddLabel('Runtime: 0s'),
+    TotalSteals = StatsGroup:AddLabel('Total Steals: 0'),
+    Successful = StatsGroup:AddLabel('Successful: 0'),
+    Failed = StatsGroup:AddLabel('Failed: 0'),
+    SuccessRate = StatsGroup:AddLabel('Success Rate: 0%'),
+    TotalValue = StatsGroup:AddLabel('Total Value: 0'),
+    AvgTime = StatsGroup:AddLabel('Avg Steal Time: 0s'),
+}
+
+StatsGroup:AddDivider()
+
+local BestStealGroup = Tabs.Statistics:AddRightGroupbox('Best Steal')
+
+local BestStealLabels = {
+    Animal = BestStealGroup:AddLabel('Animal: None'),
+    Generation = BestStealGroup:AddLabel('Generation: 0'),
+    Mutation = BestStealGroup:AddLabel('Mutation: None'),
+}
+
+BestStealGroup:AddDivider()
+
+BestStealGroup:AddButton({
+    Text = 'Reset Statistics',
+    Func = function()
+        Stats = {
+            successfulSteals = 0,
+            failedSteals = 0,
+            totalValue = 0,
+            bestSteal = {generation = 0, mutation = "None"},
+            averageStealTime = 0,
+            stealTimes = {},
+        }
+        State.sessionStartTime = tick()
+        State.totalSteals = 0
+        State.failedAttempts = 0
+        print('[STATS] Statistics reset')
+    end,
+    Tooltip = 'Reset all session statistics'
+})
+
+-- Update statistics display
+task.spawn(function()
+    while true do
+        if Library.Unloaded then break end
+        
+        local runtime = tick() - State.sessionStartTime
+        local totalAttempts = Stats.successfulSteals + Stats.failedSteals
+        local successRate = totalAttempts > 0 and (Stats.successfulSteals / totalAttempts * 100) or 0
+        
+        StatsLabels.Runtime:SetText('Runtime: ' .. FormatTime(runtime))
+        StatsLabels.TotalSteals:SetText('Total Steals: ' .. State.totalSteals)
+        StatsLabels.Successful:SetText('Successful: ' .. Stats.successfulSteals)
+        StatsLabels.Failed:SetText('Failed: ' .. Stats.failedSteals)
+        StatsLabels.SuccessRate:SetText(string.format('Success Rate: %.1f%%', successRate))
+        StatsLabels.TotalValue:SetText('Total Value: ' ..FormatNumber(Stats.totalValue))
+        StatsLabels.AvgTime:SetText('Avg Steal Time: ' .. FormatTime(Stats.averageStealTime))
+
+        BestStealLabels.Animal:SetText('Animal: ' .. (Stats.bestSteal.animal or "None"))
+        BestStealLabels.Generation:SetText('Generation: ' .. tostring(Stats.bestSteal.generation or 0))
+        BestStealLabels.Mutation:SetText('Mutation: ' .. (Stats.bestSteal.mutation or "None"))
+
+        task.wait(0.5)
+    end
+end)
+
+-- ============================================================================
+-- MAIN AUTO-ROB THREAD
+-- ============================================================================
+
+task.spawn(function()
+    while true do
+        if Library.Unloaded then break end
+
+        if State.autoRob then
+            local success, err = pcall(MainLoop)
+            if not success then
+                warn('[AUTO-ROB ERROR]', err)
+                task.wait(2)
+            end
+        else
+            task.wait(0.5)
+        end
+    end
+end)
+
+-- ============================================================================
+-- UI SETTINGS TAB (LINORIA STANDARD)
+-- ============================================================================
+
+local MenuGroup = Tabs.UISettings:AddLeftGroupbox('Menu')
+
+MenuGroup:AddButton('Unload', function()
+    Library:Unload()
+end)
+
+MenuGroup:AddLabel('Menu bind'):AddKeyPicker('MenuKeybind', {
+    Default = 'End',
+    NoUI = true,
+    Text = 'Menu keybind'
+})
+
+Library.ToggleKeybind = Options.MenuKeybind
+
+-- ============================================================================
+-- THEME & CONFIG MANAGERS
+-- ============================================================================
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
+
+ThemeManager:SetFolder('BrainrotAutoRob')
+SaveManager:SetFolder('BrainrotAutoRob/configs')
+
+SaveManager:BuildConfigSection(Tabs.UISettings)
+ThemeManager:ApplyToTab(Tabs.UISettings)
+
+SaveManager:LoadAutoloadConfig()
+
+-- ============================================================================
+-- CLEANUP ON UNLOAD
+-- ============================================================================
+
+Library:OnUnload(function()
+    print('[AUTO-ROB] Unloading Brainrot Auto-Steal V3.0')
+
+    State.autoRob = false
+    State.isPaused = true
+
+    if visualMarker then
+        visualMarker:Destroy()
+    end
+end)
+
+print('[AUTO-ROB] Brainrot Auto-Steal V3.0 loaded successfully')
